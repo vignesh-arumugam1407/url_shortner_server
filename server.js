@@ -1,11 +1,17 @@
 import express from 'express';
 import cors from 'cors';
-import 'dotenv/config';
 import https from 'https';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// Load env vars - gracefully handle missing .env in production
+try { (await import('dotenv/config')); } catch (_) {}
+
+console.log('🚀 Starting server...');
+process.on('uncaughtException', (err) => { console.error('CRASH:', err); process.exit(1); });
+process.on('unhandledRejection', (err) => { console.error('UNHANDLED:', err); });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
