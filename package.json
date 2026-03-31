@@ -3,13 +3,12 @@
   "version": "1.0.0",
   "description": "URL Shortener Backend API",
   "main": "server.js",
-  "type": "module",
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "cors": "^2.8.6",
