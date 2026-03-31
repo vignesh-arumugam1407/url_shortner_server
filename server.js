@@ -1,20 +1,24 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const crypto = require('crypto');
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import https from 'https';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 app.use(cors());
 app.use(express.json());
 
-// ─── Simple File-Based Storage ──────────────────────────────────────────────
-// This is a local JSON store that works WITHOUT any database.
-// No Supabase, no Prisma, no firebase-admin needed.
+// ─── File-Based Storage ───────────────────────────────────────────────────────
 const DB_PATH = path.join(__dirname, 'data', 'links.json');
 
 const ensureDbFile = () => {
@@ -23,17 +27,10 @@ const ensureDbFile = () => {
   if (!fs.existsSync(DB_PATH)) fs.writeFileSync(DB_PATH, JSON.stringify({ links: [], users: [] }));
 };
 
-const readDb = () => {
-  ensureDbFile();
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-};
+const readDb = () => { ensureDbFile(); return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); };
+const writeDb = (data) => { ensureDbFile(); fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2)); };
 
-const writeDb = (data) => {
-  ensureDbFile();
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-};
-
-// ─── Firebase Token Verification (REST, no Admin SDK needed) ────────────────
+// ─── Firebase Token Verification (REST, no Admin SDK needed) ─────────────────
 const verifyFirebaseToken = (idToken) => {
   return new Promise((resolve, reject) => {
     const apiKey = process.env.FIREBASE_WEB_API_KEY;
@@ -53,7 +50,7 @@ const verifyFirebaseToken = (idToken) => {
         try {
           const parsed = JSON.parse(data);
           if (parsed.error) return reject(new Error(parsed.error.message));
-          const user = parsed.users && parsed.users[0];
+          const user = parsed.users?.[0];
           if (!user) return reject(new Error('User not found in Firebase'));
           resolve({ uid: user.localId, email: user.email, name: user.displayName });
         } catch (e) { reject(e); }
@@ -67,7 +64,7 @@ const verifyFirebaseToken = (idToken) => {
 
 const authMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'No token provided' });
   }
   try {
@@ -79,26 +76,31 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-// ─── Helper ─────────────────────────────────────────────────────────────────
-const generateShortCode = () => crypto.randomBytes(3).toString('hex'); // 6 chars
+const generateShortCode = () => crypto.randomBytes(3).toString('hex');
 
-// ─── Routes ──────────────────────────────────────────────────────────────────
+// ─── Routes ───────────────────────────────────────────────────────────────────
 
 // Health check
-app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok ✅', time: new Date().toISOString() }));
 
-// Sync user (called by frontend after login)
+// Sync Firebase user to local DB
 app.post('/api/auth/sync', authMiddleware, (req, res) => {
   const db = readDb();
   const existing = db.users.find(u => u.uid === req.user.uid);
   if (!existing) {
-    db.users.push({ id: crypto.randomUUID(), uid: req.user.uid, email: req.user.email, name: req.user.name || req.user.email?.split('@')[0], createdAt: new Date().toISOString() });
+    db.users.push({
+      id: crypto.randomUUID(),
+      uid: req.user.uid,
+      email: req.user.email,
+      name: req.user.name || req.user.email?.split('@')[0],
+      createdAt: new Date().toISOString()
+    });
     writeDb(db);
   }
   res.json({ message: 'User synced', uid: req.user.uid });
 });
 
-// Shorten URL
+// Shorten a URL
 app.post('/api/url/shorten', authMiddleware, (req, res) => {
   let { originalUrl } = req.body;
   if (!originalUrl || typeof originalUrl !== 'string') {
@@ -122,7 +124,7 @@ app.post('/api/url/shorten', authMiddleware, (req, res) => {
   db.links.push(newLink);
   writeDb(db);
 
-  const appUrl = process.env.APP_URL || 'http://localhost:5000';
+  const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
   res.json({
     message: 'URL shortened successfully!',
     shortUrl: `${appUrl}/${shortCode}`,
@@ -142,19 +144,26 @@ app.get('/api/url/history', authMiddleware, (req, res) => {
 // ─── Short URL Redirect ───────────────────────────────────────────────────────
 app.get('/:shortCode', (req, res) => {
   const { shortCode } = req.params;
-  // Skip API routes
   if (shortCode.startsWith('api')) return res.status(404).json({ error: 'Not found' });
 
   const db = readDb();
   const link = db.links.find(l => l.shortCode === shortCode);
 
   if (link) {
-    // Increment click count
     link.clicks++;
     writeDb(db);
     return res.redirect(link.originalUrl);
   }
-  res.status(404).send('<h2 style="font-family:sans-serif;text-align:center;margin-top:100px">404 — Link Not Found</h2>');
+
+  res.status(404).send(`
+    <html>
+      <body style="font-family:sans-serif;text-align:center;margin-top:100px">
+        <h2>404 — Link Not Found</h2>
+        <p>This short link does not exist or has expired.</p>
+        <a href="${process.env.APP_URL || 'http://localhost:5173'}">← Go Home</a>
+      </body>
+    </html>
+  `);
 });
 
 app.listen(PORT, () => {
