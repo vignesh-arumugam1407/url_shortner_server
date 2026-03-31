@@ -1,17 +1,24 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const https = require('https');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+
 
 console.log('🚀 Starting URL Shortener Server...');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// Explicit CORS - allow all origins, handle preflight
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
 app.use(express.json());
 
 // ─── File-Based Storage ───────────────────────────────────────────────────────
