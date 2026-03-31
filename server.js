@@ -155,7 +155,8 @@ app.get('/:shortCode', (req, res) => {
 });
 
 // ─── Start ───────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   ensureDbFile();
   console.log(`✅ Server running on port ${PORT}`);
+  console.log(`   Health: http://0.0.0.0:${PORT}/api/health`);
 });
