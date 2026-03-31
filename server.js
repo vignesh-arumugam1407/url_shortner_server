@@ -15,7 +15,24 @@ const PORT = process.env.PORT || 5000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    const allowed = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      process.env.FRONTEND_URL, // Set this in Railway env vars
+    ].filter(Boolean);
+    if (allowed.some(o => origin.startsWith(o))) {
+      callback(null, true);
+    } else {
+      // In dev/testing, allow all. In production, lock this down.
+      callback(null, true);
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 // ─── File-Based Storage ───────────────────────────────────────────────────────
