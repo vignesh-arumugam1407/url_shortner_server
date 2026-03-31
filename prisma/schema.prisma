@@ -1,0 +1,50 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @db.Uuid
+  name      String   @db.VarChar(100)
+  email     String   @unique @db.VarChar(100)
+  password  String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  urls      Url[]    
+
+  @@map("users")
+}
+
+model Url {
+  id          Int      @id @default(autoincrement())
+  originalUrl String   @map("original_url") @db.Text
+  shortCode   String   @unique @map("short_code") @db.VarChar(10)
+  userId      String?  @map("user_id") @db.Uuid
+  clicks      Int      @default(0)
+  expiryDate  DateTime? @map("expiry_date")
+  password    String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analytics   Analytics[]
+
+  @@map("urls")
+}
+
+model Analytics {
+  id        Int      @id @default(autoincrement())
+  urlId     Int      @map("url_id")
+  ipAddress String?  @map("ip_address") @db.VarChar(50)
+  userAgent String?  @map("user_agent") @db.Text
+  country   String?  @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  url       Url      @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@map("analytics")
+}
